@@ -52,6 +52,7 @@ data class Student(
                 grade.total,
                 grade.grade.name
             ))
+            
         }
 
         sb.appendLine("-".repeat(50))
@@ -60,4 +61,5 @@ data class Student(
 
         return sb.toString()
     }
+
 }
