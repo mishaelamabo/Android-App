@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.widget.Button
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,12 +36,12 @@ class ExcelImportActivity : AppCompatActivity() {
         setContentView(R.layout.activity_excel_import)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        if (toolbar == null) {
-            // If toolbar is missing in the XML, we might need to handle it, 
-            // but based on previous turns it should be there or added via layout update.
-        } else {
+        if (toolbar != null) {
             toolbar.setNavigationIcon(R.drawable.ic_arrow_back)
-            toolbar.setNavigationOnClickListener { onBackPressed() }
+            toolbar.setNavigationOnClickListener { 
+                @Suppress("DEPRECATION")
+                onBackPressed() 
+            }
         }
 
         findViewById<Button>(R.id.btnPickFile).setOnClickListener {
@@ -72,14 +73,12 @@ class ExcelImportActivity : AppCompatActivity() {
                 val sheet = workbook.getSheetAt(0)
                 val newStudents = mutableListOf<Student>()
 
-                // Columns expected: 0: Name, 1: Matricle, 2: CA Mark, 3: Exam Mark
                 for (i in 1..sheet.lastRowNum) {
                     val row = sheet.getRow(i) ?: continue
                     
                     val name = row.getCell(0)?.toString()?.trim() ?: ""
                     val matricle = row.getCell(1)?.toString()?.trim() ?: ""
                     
-                    // Safe numeric extraction
                     val caMark = try {
                         row.getCell(2)?.numericCellValue ?: 0.0
                     } catch (e: Exception) {
@@ -93,17 +92,16 @@ class ExcelImportActivity : AppCompatActivity() {
                     }
 
                     if (name.isNotEmpty()) {
-                        // "Imported" is used as the default course name for imported files
                         newStudents.add(Student(name, matricle, "Imported", caMark, examMark))
                     }
                 }
                 StudentRepository.addStudents(newStudents)
-                Toast.makeText(this, "Successfully imported ${newStudents.size} students. Calculations complete!", Toast.LENGTH_LONG).show()
-                finish() // Go back to dashboard to see updated stats
+                Toast.makeText(this, "Successfully imported ${newStudents.size} students.", Toast.LENGTH_LONG).show()
+                finish()
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Error reading Excel file. Ensure it has 4 columns: Name, Matricle, CA, Exam.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Error reading Excel file.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -112,7 +110,6 @@ class ExcelImportActivity : AppCompatActivity() {
             val workbook = XSSFWorkbook()
             val sheet = workbook.createSheet("Grading Results")
             
-            // Modern Header
             val header = sheet.createRow(0)
             val columns = arrayOf("Student Name", "Matricle", "Course", "CA Mark", "Exam Mark", "Total Mark", "Grade", "Grade Point")
             columns.forEachIndexed { i, title ->
@@ -135,10 +132,27 @@ class ExcelImportActivity : AppCompatActivity() {
             contentResolver.openOutputStream(uri)?.use { outputStream ->
                 workbook.write(outputStream)
             }
-            Toast.makeText(this, "Results downloaded successfully to your device!", Toast.LENGTH_LONG).show()
+
+            // Get the display path
+            val path = getPathFromUri(uri)
+            Toast.makeText(this, "Saved to: $path", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Failed to save the file.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getPathFromUri(uri: Uri): String {
+        return if (DocumentsContract.isDocumentUri(this, uri)) {
+            val docId = DocumentsContract.getDocumentId(uri)
+            val split = docId.split(":")
+            if (split.size > 1) {
+                "${split[0]}/${split[1]}"
+            } else {
+                docId
+            }
+        } else {
+            uri.path ?: "Internal Storage"
         }
     }
 }
